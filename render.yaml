@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: taskbasket-ws
+    runtime: node
+    plan: free
+    buildCommand: pnpm install
+    startCommand: pnpm start:ws
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
