@@ -80,6 +80,8 @@ export type RealtimeEvent =
   | { type: 'TASK_DELETED'; taskId: string; taskTitle: string; projectId: string; user: User; timestamp: string }
   | { type: 'TASK_MOVED'; taskId: string; projectId: string; fromStatus: TaskStatus; toStatus: TaskStatus; user: User; timestamp: string }
   | { type: 'PROJECT_CREATED'; project: Project; user: User; timestamp: string }
+  | { type: 'PROJECT_UPDATED'; project: Project; user: User; timestamp: string }
+  | { type: 'PROJECT_DELETED'; projectId: string; projectName: string; user: User; timestamp: string }
   | { type: 'PROJECT_MEMBER_JOINED'; projectId: string; member: ProjectMember; user: User; timestamp: string }
   | { type: 'PRESENCE_HEARTBEAT'; session: CollaboratorSession }
   | { type: 'PRESENCE_LEAVE'; tabId: string }

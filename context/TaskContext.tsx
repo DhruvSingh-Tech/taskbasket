@@ -72,10 +72,17 @@ interface TaskContextType {
 
   // Project operations
   createProject: (name: string, color?: string, description?: string) => Promise<Project | null>;
+  updateProject: (id: string, data: { name?: string; description?: string; color?: string }) => Promise<Project | null>;
+  deleteProject: (id: string) => Promise<boolean>;
   joinProject: (code: string) => Promise<{ success: boolean; message?: string; error?: string; project?: Project }>;
   refreshProjects: () => Promise<void>;
   refreshTasks: (projectId?: string) => Promise<void>;
   refreshActivities: (projectId?: string) => Promise<void>;
+  isProjectSettingsOpen: boolean;
+  setIsProjectSettingsOpen: (isOpen: boolean) => void;
+  projectToEdit: Project | null;
+  openProjectSettings: (project: Project) => void;
+  closeProjectSettings: () => void;
 
   // Realtime Presence / Lock Helpers
   startEditingTask: (taskId: string) => void;
@@ -123,6 +130,8 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState<boolean>(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState<boolean>(false);
+  const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState<boolean>(false);
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
 
   const channelRef = useRef<BroadcastChannel | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -286,6 +295,28 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (prev.some((p) => p.id === event.project.id)) return prev;
             return [event.project, ...prev];
           });
+          break;
+        }
+
+        case 'PROJECT_UPDATED': {
+          setProjects((prev) =>
+            prev.map((p) => (p.id === event.project.id ? { ...p, ...event.project } : p))
+          );
+          if (event.project.id === activeProjectIdRef.current) {
+            addNotification('Project Updated', `${event.user.name} updated workspace details`, 'info');
+          }
+          break;
+        }
+
+        case 'PROJECT_DELETED': {
+          setProjects((prev) => {
+            const remaining = prev.filter((p) => p.id !== event.projectId);
+            if (activeProjectIdRef.current === event.projectId) {
+              setActiveProjectId(remaining.length > 0 ? remaining[0].id : '');
+            }
+            return remaining;
+          });
+          addNotification('Project Deleted', `${event.user.name} deleted "${event.projectName}"`, 'warning');
           break;
         }
 
@@ -904,6 +935,107 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [broadcast, addNotification]
   );
 
+  // Update Project (Admin Only)
+  const updateProject = useCallback(
+    async (id: string, data: { name?: string; description?: string; color?: string }) => {
+      if (!currentUserRef.current) {
+        addNotification('Unauthorized', 'Please sign in to update workspace', 'warning');
+        return null;
+      }
+
+      try {
+        const res = await fetch('/api/projects', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, ...data }),
+        });
+
+        const resData = await res.json();
+        if (!res.ok) {
+          addNotification('Permission Denied', resData.error || 'Failed to update project', 'warning');
+          return null;
+        }
+
+        const updated: Project = resData.project;
+        setProjects((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, ...updated } : p))
+        );
+
+        broadcast({
+          type: 'PROJECT_UPDATED',
+          project: updated,
+          user: currentUserRef.current,
+          timestamp: new Date().toISOString(),
+        });
+
+        addNotification('Project Updated', `"${updated.name}" settings saved`, 'success');
+        return updated;
+      } catch (err) {
+        addNotification('Error', 'Network error updating project', 'warning');
+        return null;
+      }
+    },
+    [broadcast, addNotification]
+  );
+
+  // Delete Project (Admin Only)
+  const deleteProject = useCallback(
+    async (id: string) => {
+      if (!currentUserRef.current) {
+        addNotification('Unauthorized', 'Please sign in to delete workspace', 'warning');
+        return false;
+      }
+
+      const target = projects.find((p) => p.id === id);
+      const projectName = target?.name || 'Workspace';
+
+      try {
+        const res = await fetch(`/api/projects?id=${id}`, {
+          method: 'DELETE',
+        });
+
+        const resData = await res.json();
+        if (!res.ok) {
+          addNotification('Permission Denied', resData.error || 'Failed to delete project', 'warning');
+          return false;
+        }
+
+        setProjects((prev) => {
+          const remaining = prev.filter((p) => p.id !== id);
+          if (activeProjectIdRef.current === id) {
+            setActiveProjectId(remaining.length > 0 ? remaining[0].id : '');
+          }
+          return remaining;
+        });
+
+        broadcast({
+          type: 'PROJECT_DELETED',
+          projectId: id,
+          projectName,
+          user: currentUserRef.current,
+          timestamp: new Date().toISOString(),
+        });
+
+        addNotification('Project Deleted', `"${projectName}" was permanently deleted`, 'info');
+        return true;
+      } catch (err) {
+        addNotification('Error', 'Network error deleting project', 'warning');
+        return false;
+      }
+    },
+    [projects, broadcast, addNotification]
+  );
+
+  const openProjectSettings = useCallback((project: Project) => {
+    setProjectToEdit(project);
+    setIsProjectSettingsOpen(true);
+  }, []);
+
+  const closeProjectSettings = useCallback(() => {
+    setIsProjectSettingsOpen(false);
+    setProjectToEdit(null);
+  }, []);
+
   // Join Project
   const joinProject = useCallback(
     async (code: string) => {
@@ -1033,10 +1165,17 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteTask,
         moveTask,
         createProject,
+        updateProject,
+        deleteProject,
         joinProject,
         refreshProjects,
         refreshTasks,
         refreshActivities,
+        isProjectSettingsOpen,
+        setIsProjectSettingsOpen,
+        projectToEdit,
+        openProjectSettings,
+        closeProjectSettings,
         startEditingTask,
         stopEditingTask,
         notifications,

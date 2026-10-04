@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useTaskContext } from '@/context/TaskContext';
-import { Plus, Check, X, Layers, UserPlus, Hash, Shield, Sparkles } from 'lucide-react';
+import { Plus, Check, X, Layers, UserPlus, Hash, Shield, Sparkles, Settings } from 'lucide-react';
 
 export const ProjectSidebar: React.FC = () => {
   const {
@@ -10,6 +10,7 @@ export const ProjectSidebar: React.FC = () => {
     activeProjectId,
     setActiveProjectId,
     createProject,
+    openProjectSettings,
     tasks,
     setIsInviteModalOpen,
     setIsJoinModalOpen,
@@ -179,6 +180,18 @@ export const ProjectSidebar: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openProjectSettings(project);
+                      }}
+                      className="p-1 rounded-lg bg-[#b79166]/60 hover:bg-[#1e1308] hover:text-[#fbf3e9] text-[#22170d] transition-colors"
+                      title="Workspace Settings & Edit (Admin)"
+                    >
+                      <Settings className="w-3 h-3" />
+                    </button>
+                  )}
                   {isActive && (
                     <button
                       onClick={(e) => {

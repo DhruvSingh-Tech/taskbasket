@@ -15,6 +15,7 @@ import { AuthModal } from '@/components/auth/AuthModal';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { InviteModal } from '@/components/projects/InviteModal';
 import { JoinProjectModal } from '@/components/projects/JoinProjectModal';
+import { ProjectSettingsModal } from '@/components/projects/ProjectSettingsModal';
 import {
   Filter,
   Plus,
@@ -29,7 +30,8 @@ import {
   WifiOff,
   UserPlus,
   Sparkles,
-  Hash
+  Hash,
+  Settings,
 } from 'lucide-react';
 
 export const TaskBoard: React.FC = () => {
@@ -39,6 +41,7 @@ export const TaskBoard: React.FC = () => {
     activeProjectId,
     activeProject,
     projectMembers,
+    openProjectSettings,
     searchQuery,
     setSearchQuery,
     filterPriority,
@@ -257,6 +260,26 @@ export const TaskBoard: React.FC = () => {
                   </h1>
                 </div>
 
+                {/* Active Project Tag & Admin Settings Trigger */}
+                {activeProject && (
+                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#e4d1b8]/80 border border-[#a88258]/60 text-xs font-bold text-[#24170c]">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+                      style={{ backgroundColor: activeProject.color || '#6366F1' }}
+                    />
+                    <span className="truncate max-w-[140px] md:max-w-[200px]">{activeProject.name}</span>
+                    {activeProject.role === 'admin' && (
+                      <button
+                        onClick={() => openProjectSettings(activeProject)}
+                        className="ml-0.5 p-0.5 rounded-md hover:bg-[#b79166]/40 text-[#44301c] hover:text-black transition-colors"
+                        title="Workspace Settings & Edit (Admin)"
+                      >
+                        <Settings className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Filter Button right next to TASKS */}
                 <div className="relative">
                   <button
@@ -470,6 +493,9 @@ export const TaskBoard: React.FC = () => {
 
       {/* Join Project Modal */}
       <JoinProjectModal />
+
+      {/* Project Settings Modal (Admin Only) */}
+      <ProjectSettingsModal />
 
       {/* Floating Bottom-Right Collaborators Pill */}
       <CollaboratorsBar />

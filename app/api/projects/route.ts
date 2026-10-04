@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { projects, projectMembers, user } from '@/db/schema';
+import { projects, projectMembers, user, tasks, activities } from '@/db/schema';
 import { auth } from '@/lib/auth';
-import { eq, inArray, desc } from 'drizzle-orm';
+import { eq, inArray, desc, and } from 'drizzle-orm';
 
 function generateInviteCode(): string {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -170,6 +170,146 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, project: fullProject });
   } catch (error) {
     console.error('[API /api/projects POST] Error:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { id, name, description, color } = body;
+
+    if (!id || typeof id !== 'string') {
+      return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
+    }
+
+    // Verify project exists
+    const existingProjects = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+    if (existingProjects.length === 0) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    const currentProject = existingProjects[0];
+    const currentUserId = session.user.id;
+
+    // Check if user is project admin
+    const membership = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, id), eq(projectMembers.userId, currentUserId)))
+      .limit(1);
+
+    const isAdmin =
+      currentProject.userId === currentUserId ||
+      (membership.length > 0 && membership[0].role === 'admin');
+
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only project admins can modify project details' },
+        { status: 403 }
+      );
+    }
+
+    const updatePayload: Record<string, any> = {};
+    if (name !== undefined) {
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return NextResponse.json({ error: 'Project name cannot be empty' }, { status: 400 });
+      }
+      updatePayload.name = name.trim();
+    }
+    if (description !== undefined) {
+      updatePayload.description = description.trim();
+    }
+    if (color !== undefined && color.trim()) {
+      updatePayload.color = color.trim();
+    }
+
+    await db.update(projects).set(updatePayload).where(eq(projects.id, id));
+
+    // Record activity
+    try {
+      const actorName = session.user.name || 'Admin';
+      await db.insert(activities).values({
+        id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        projectId: id,
+        taskTitle: updatePayload.name || currentProject.name,
+        type: 'updated',
+        userId: currentUserId,
+        details: `Project details updated by ${actorName}`,
+      });
+    } catch (e) {
+      // Non-fatal
+    }
+
+    const updatedProject = {
+      ...currentProject,
+      ...updatePayload,
+      role: 'admin' as const,
+      createdById: currentProject.userId,
+    };
+
+    return NextResponse.json({ success: true, project: updatedProject });
+  } catch (error) {
+    console.error('[API /api/projects PUT] Error:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
+    }
+
+    // Verify project exists
+    const existingProjects = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+    if (existingProjects.length === 0) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    const currentProject = existingProjects[0];
+    const currentUserId = session.user.id;
+
+    // Check if user is project admin
+    const membership = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, id), eq(projectMembers.userId, currentUserId)))
+      .limit(1);
+
+    const isAdmin =
+      currentProject.userId === currentUserId ||
+      (membership.length > 0 && membership[0].role === 'admin');
+
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only project admins can delete a project' },
+        { status: 403 }
+      );
+    }
+
+    // Cleanly delete tasks, activities, members, and project
+    await db.delete(tasks).where(eq(tasks.projectId, id));
+    await db.delete(activities).where(eq(activities.projectId, id));
+    await db.delete(projectMembers).where(eq(projectMembers.projectId, id));
+    await db.delete(projects).where(eq(projects.id, id));
+
+    return NextResponse.json({ success: true, id, name: currentProject.name });
+  } catch (error) {
+    console.error('[API /api/projects DELETE] Error:', error);
     return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }
