@@ -144,7 +144,7 @@ export const TaskBoard: React.FC = () => {
   return (
     <div className="w-full h-full flex-1 flex flex-col lg:flex-row items-stretch gap-4 min-h-0 overflow-hidden">
       {/* LEFT COLUMN: Navbar Pill at top + Projects Sidebar underneath */}
-      <div className="w-full lg:w-64 xl:w-72 h-full flex flex-col gap-3 shrink-0 min-h-0">
+      <div className="w-full lg:w-72 xl:w-80 h-full flex flex-col gap-3 shrink-0 min-h-0">
         <NavbarPill />
         <ProjectSidebar />
       </div>
@@ -201,30 +201,8 @@ export const TaskBoard: React.FC = () => {
               )}
             </div>
 
-            {/* Toolbar Actions: Live Sync, View Switcher, Activity, Reset */}
+            {/* Toolbar Actions: View Switcher, Activity Log */}
             <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-              {/* Live Sync Status with WebSocket / Local Fallback indication */}
-              <div
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors ${
-                  isWsConnected
-                    ? 'bg-emerald-900/15 border border-emerald-900/25 text-emerald-950'
-                    : 'bg-amber-900/15 border border-amber-900/25 text-amber-950'
-                }`}
-                title={isWsConnected ? 'Connected to WebSocket Server' : 'Running on Local Tab Sync (BroadcastChannel)'}
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    isWsConnected ? 'bg-emerald-700 animate-pulse' : 'bg-amber-700'
-                  }`}
-                />
-                <span className="hidden sm:inline">
-                  {isWsConnected ? 'WS Sync' : 'Local Sync'}
-                </span>
-                <span className="text-[10px] font-mono font-bold">
-                  ({collaborators.length + 1})
-                </span>
-              </div>
-
               {/* View Switcher */}
               <div className="flex items-center p-0.5 bg-[#b59066]/50 border border-[#9b7850]/50 rounded-xl shrink-0">
                 <button
@@ -255,7 +233,7 @@ export const TaskBoard: React.FC = () => {
               <button
                 onClick={() => setIsActivityOpen(!isActivityOpen)}
                 className="relative p-1.5 rounded-xl bg-[#dfccaF]/90 hover:bg-[#eee0ce] text-[#342414] hover:text-black border border-[#a88258]/60 shadow-sm transition-colors shrink-0"
-                title="Activity Log"
+                title="Project Activity Log"
               >
                 <History className="w-3.5 h-3.5" />
                 {activities.length > 0 && (
@@ -263,15 +241,6 @@ export const TaskBoard: React.FC = () => {
                     {activities.length > 9 ? '9+' : activities.length}
                   </span>
                 )}
-              </button>
-
-              {/* Reset Demo Data */}
-              <button
-                onClick={resetToDefaultData}
-                className="p-1.5 rounded-xl bg-[#dfccaF]/90 hover:bg-[#eee0ce] text-[#4a341f] hover:text-black border border-[#a88258]/60 shadow-sm transition-colors shrink-0"
-                title="Reset demo data"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

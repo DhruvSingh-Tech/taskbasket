@@ -9,6 +9,7 @@ import {
   ProjectMember,
   User,
   ActivityLog,
+  ActivityType,
   CollaboratorSession,
   RealtimeEvent,
 } from '@/types/task';
@@ -74,6 +75,7 @@ interface TaskContextType {
   joinProject: (code: string) => Promise<{ success: boolean; message?: string; error?: string; project?: Project }>;
   refreshProjects: () => Promise<void>;
   refreshTasks: (projectId?: string) => Promise<void>;
+  refreshActivities: (projectId?: string) => Promise<void>;
 
   // Realtime Presence / Lock Helpers
   startEditingTask: (taskId: string) => void;
@@ -176,6 +178,19 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (prev.some((t) => t.id === event.task.id)) return prev;
               return [event.task, ...prev];
             });
+            setActivities((prev) => [
+              {
+                id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                projectId: event.task.projectId,
+                taskId: event.task.id,
+                taskTitle: event.task.title,
+                type: 'created',
+                user: event.user,
+                timestamp: event.timestamp || new Date().toISOString(),
+                details: `Task "${event.task.title}" was created by ${event.user.name}`,
+              },
+              ...prev,
+            ]);
             addNotification('Task Added', `${event.user.name} created "${event.task.title}"`, 'info');
           }
           break;
@@ -191,6 +206,19 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
               addNotification('Edit Conflict Alert', `${event.user.name} updated this task concurrently!`, 'warning');
             }
             setTasks((prev) => prev.map((t) => (t.id === event.task.id ? event.task : t)));
+            setActivities((prev) => [
+              {
+                id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                projectId: event.task.projectId,
+                taskId: event.task.id,
+                taskTitle: event.task.title,
+                type: 'updated',
+                user: event.user,
+                timestamp: event.timestamp || new Date().toISOString(),
+                details: `Task "${event.task.title}" was updated by ${event.user.name}`,
+              },
+              ...prev,
+            ]);
             addNotification('Task Updated', `${event.user.name} updated "${event.task.title}"`, 'info');
           }
           break;
@@ -198,10 +226,36 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         case 'TASK_MOVED': {
           if (event.projectId === activeProjectIdRef.current) {
+            let taskTitle = 'Task';
             setTasks((prev) =>
-              prev.map((t) => (t.id === event.taskId ? { ...t, status: event.toStatus, version: t.version + 1 } : t))
+              prev.map((t) => {
+                if (t.id === event.taskId) {
+                  taskTitle = t.title;
+                  return { ...t, status: event.toStatus, version: t.version + 1 };
+                }
+                return t;
+              })
             );
-            addNotification('Task Moved', `${event.user.name} moved a task to ${event.toStatus.replace('-', ' ')}`, 'info');
+            const statusLabels: Record<string, string> = {
+              todo: 'To Do',
+              'in-progress': 'In Progress',
+              completed: 'Completed',
+            };
+            const toLabel = statusLabels[event.toStatus] || event.toStatus;
+            setActivities((prev) => [
+              {
+                id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                projectId: event.projectId,
+                taskId: event.taskId,
+                taskTitle,
+                type: 'status_changed',
+                user: event.user,
+                timestamp: event.timestamp || new Date().toISOString(),
+                details: `Task "${taskTitle}" has been moved to ${toLabel} by ${event.user.name}`,
+              },
+              ...prev,
+            ]);
+            addNotification('Task Moved', `${event.user.name} moved a task to ${toLabel}`, 'info');
           }
           break;
         }
@@ -209,6 +263,19 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         case 'TASK_DELETED': {
           if (event.projectId === activeProjectIdRef.current) {
             setTasks((prev) => prev.filter((t) => t.id !== event.taskId));
+            setActivities((prev) => [
+              {
+                id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                projectId: event.projectId,
+                taskId: event.taskId,
+                taskTitle: event.taskTitle,
+                type: 'deleted',
+                user: event.user,
+                timestamp: event.timestamp || new Date().toISOString(),
+                details: `Task "${event.taskTitle}" was deleted by ${event.user.name}`,
+              },
+              ...prev,
+            ]);
             addNotification('Task Deleted', `${event.user.name} deleted "${event.taskTitle}"`, 'warning');
           }
           break;
@@ -228,6 +295,18 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (prev.some((m) => m.userId === event.member.userId)) return prev;
               return [...prev, event.member];
             });
+            setActivities((prev) => [
+              {
+                id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                projectId: event.projectId,
+                taskTitle: 'New Collaborator',
+                type: 'member_joined',
+                user: event.user,
+                timestamp: event.timestamp || new Date().toISOString(),
+                details: `${event.user.name} joined the project`,
+              },
+              ...prev,
+            ]);
             addNotification('New Teammate', `${event.user.name} joined the project!`, 'success');
           }
           break;
@@ -341,6 +420,25 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Refresh Activities for active project
+  const refreshActivities = useCallback(async (projId?: string) => {
+    const targetId = projId || activeProjectIdRef.current;
+    if (!targetId) {
+      setActivities([]);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/activities?projectId=${targetId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setActivities(data.activities || []);
+      }
+    } catch (err) {
+      console.warn('[TaskBasket] Failed to fetch activities:', err);
+    }
+  }, []);
+
   // Session Sync & Auto-Join Pending Invites
   useEffect(() => {
     if (authSession?.user) {
@@ -386,19 +484,22 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProjects([]);
       setTasks([]);
       setProjectMembers([]);
+      setActivities([]);
       setActiveProjectId('');
     }
   }, [authSession, refreshProjects, addNotification]);
 
-  // When activeProjectId changes, fetch tasks & members
+  // When activeProjectId changes, fetch tasks, members & activities project-wise
   useEffect(() => {
     if (activeProjectId) {
       refreshTasks(activeProjectId);
+      refreshActivities(activeProjectId);
     } else {
       setTasks([]);
       setProjectMembers([]);
+      setActivities([]);
     }
-  }, [activeProjectId, refreshTasks]);
+  }, [activeProjectId, refreshTasks, refreshActivities]);
 
   // WebSocket Connection Lifecycle
   useEffect(() => {
@@ -549,6 +650,20 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setTasks((prev) => [createdTask, ...prev]);
 
+        setActivities((prev) => [
+          {
+            id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            projectId: targetProjectId,
+            taskId: createdTask.id,
+            taskTitle: createdTask.title,
+            type: 'created',
+            user: currentUserRef.current!,
+            timestamp: new Date().toISOString(),
+            details: `Task "${createdTask.title}" was created by ${currentUserRef.current!.name}`,
+          },
+          ...prev,
+        ]);
+
         broadcast({
           type: 'TASK_CREATED',
           task: createdTask,
@@ -583,6 +698,36 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Optimistic update
       setTasks((prev) => prev.map((t) => (t.id === id ? updatedTask : t)));
+
+      const statusLabels: Record<string, string> = {
+        todo: 'To Do',
+        'in-progress': 'In Progress',
+        completed: 'Completed',
+      };
+      let actType: ActivityType = 'updated';
+      let actDetails = `Task "${target.title}" was updated by ${currentUserRef.current.name}`;
+      if (updates.status && updates.status !== target.status) {
+        actType = 'status_changed';
+        const toLabel = statusLabels[updates.status] || updates.status;
+        actDetails = `Task "${target.title}" has been moved to ${toLabel} by ${currentUserRef.current.name}`;
+      } else if (updates.assignedTo && updates.assignedTo.id !== target.assignedTo.id) {
+        actType = 'assigned';
+        actDetails = `Task "${target.title}" was assigned to ${updates.assignedTo.name} by ${currentUserRef.current.name}`;
+      }
+
+      setActivities((prev) => [
+        {
+          id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          projectId: target.projectId,
+          taskId: id,
+          taskTitle: updates.title || target.title,
+          type: actType,
+          user: currentUserRef.current!,
+          timestamp: new Date().toISOString(),
+          details: actDetails,
+        },
+        ...prev,
+      ]);
 
       broadcast({
         type: 'TASK_UPDATED',
@@ -630,6 +775,27 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
 
+      const statusLabels: Record<string, string> = {
+        todo: 'To Do',
+        'in-progress': 'In Progress',
+        completed: 'Completed',
+      };
+      const toLabel = statusLabels[newStatus] || newStatus;
+
+      setActivities((prev) => [
+        {
+          id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          projectId: target.projectId,
+          taskId: id,
+          taskTitle: target.title,
+          type: 'status_changed',
+          user: currentUserRef.current!,
+          timestamp: new Date().toISOString(),
+          details: `Task "${target.title}" has been moved to ${toLabel} by ${currentUserRef.current!.name}`,
+        },
+        ...prev,
+      ]);
+
       broadcast({
         type: 'TASK_MOVED',
         taskId: id,
@@ -661,6 +827,20 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!target) return;
 
       setTasks((prev) => prev.filter((t) => t.id !== id));
+
+      setActivities((prev) => [
+        {
+          id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          projectId: target.projectId,
+          taskId: id,
+          taskTitle: target.title,
+          type: 'deleted',
+          user: currentUserRef.current!,
+          timestamp: new Date().toISOString(),
+          details: `Task "${target.title}" was deleted by ${currentUserRef.current!.name}`,
+        },
+        ...prev,
+      ]);
 
       broadcast({
         type: 'TASK_DELETED',
@@ -856,6 +1036,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         joinProject,
         refreshProjects,
         refreshTasks,
+        refreshActivities,
         startEditingTask,
         stopEditingTask,
         notifications,

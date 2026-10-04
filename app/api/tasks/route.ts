@@ -187,6 +187,7 @@ export async function POST(request: Request) {
 
     // Record activity
     try {
+      const actorName = session.user.name || 'Member';
       await db.insert(activities).values({
         id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         projectId,
@@ -194,7 +195,7 @@ export async function POST(request: Request) {
         taskTitle: title.trim(),
         type: 'created',
         userId: currentUserId,
-        details: `Created by ${session.user.name || 'Member'}`,
+        details: `Task "${title.trim()}" was created by ${actorName}`,
       });
     } catch (e) {
       // Non-fatal
@@ -330,6 +331,49 @@ export async function PUT(request: Request) {
 
     await db.update(tasks).set(updatePayload).where(eq(tasks.id, id));
 
+    // Record activity
+    try {
+      const actorName = session.user.name || 'Member';
+      const statusLabels: Record<string, string> = {
+        todo: 'To Do',
+        'in-progress': 'In Progress',
+        completed: 'Completed',
+      };
+
+      let actType = 'updated';
+      let actDetails = `Task "${existingTask.title}" was updated by ${actorName}`;
+
+      if (status !== undefined && status !== existingTask.status) {
+        actType = 'status_changed';
+        const toLabel = statusLabels[status] || status;
+        actDetails = `Task "${existingTask.title}" has been moved to ${toLabel} by ${actorName}`;
+      } else if (assignedToId !== undefined && assignedToId !== existingTask.assignedToId) {
+        actType = 'assigned';
+        let assigneeName = 'Unassigned';
+        if (targetAssigneeId) {
+          const assigneeRows = await db.select().from(user).where(eq(user.id, targetAssigneeId)).limit(1);
+          if (assigneeRows.length > 0) {
+            assigneeName = assigneeRows[0].name;
+          }
+        }
+        actDetails = `Task "${existingTask.title}" was assigned to ${assigneeName} by ${actorName}`;
+      } else if (title !== undefined && title.trim() !== existingTask.title) {
+        actDetails = `Task "${title.trim()}" was updated by ${actorName}`;
+      }
+
+      await db.insert(activities).values({
+        id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        projectId: existingTask.projectId,
+        taskId: existingTask.id,
+        taskTitle: title ? title.trim() : existingTask.title,
+        type: actType,
+        userId: currentUserId,
+        details: actDetails,
+      });
+    } catch (e) {
+      // Non-fatal
+    }
+
     return NextResponse.json({
       success: true,
       version: newVersion,
@@ -379,6 +423,22 @@ export async function DELETE(request: Request) {
     }
 
     await db.delete(tasks).where(eq(tasks.id, id));
+
+    // Record activity
+    try {
+      const actorName = session.user.name || 'Member';
+      await db.insert(activities).values({
+        id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        projectId: existingTask.projectId,
+        taskId: existingTask.id,
+        taskTitle: existingTask.title,
+        type: 'deleted',
+        userId: currentUserId,
+        details: `Task "${existingTask.title}" was deleted by ${actorName}`,
+      });
+    } catch (e) {
+      // Non-fatal
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

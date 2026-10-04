@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import GlassSurface from '@/components/GlassSurface';
 import { useTaskContext } from '@/context/TaskContext';
 import { useSession } from '@/lib/auth-client';
-import { User, LogIn } from 'lucide-react';
+import { LogIn, LayoutDashboard } from 'lucide-react';
 
 export const NavbarPill: React.FC = () => {
   const pathname = usePathname();
@@ -21,62 +21,78 @@ export const NavbarPill: React.FC = () => {
       backgroundOpacity={0.15}
       saturation={1.2}
       distortionScale={-80}
-      className="px-3.5 shrink-0"
+      className="px-3 shrink-0"
     >
-      <nav className="w-full flex items-center justify-between px-1">
+      <nav className="w-full flex items-center justify-between gap-3 px-1">
+        {/* Brand Logo & Name */}
         <Link
           href="/"
-          className="text-sm font-bold tracking-tight text-white hover:text-white/90 transition-colors"
+          className="flex items-center gap-2 group shrink-0"
+          title="TaskBasket Home"
         >
-          TaskBasket
+          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-[#1e1308] font-black text-[11px] shadow-sm">
+            TB
+          </div>
+          <span className="text-sm font-bold tracking-tight text-white group-hover:text-amber-300 transition-colors">
+            TaskBasket
+          </span>
         </Link>
 
-        <div className="flex items-center gap-3 text-xs font-medium text-white/75">
-          <Link
-            href="/"
-            className={`hover:text-white transition-colors ${
-              pathname === '/' ? 'text-white font-bold' : ''
-            }`}
-          >
-            Home
-          </Link>
-          <Link
-            href="/about"
-            className={`hover:text-white transition-colors ${
-              pathname === '/about' ? 'text-white font-bold' : ''
-            }`}
-          >
-            About
-          </Link>
-        </div>
-
-        <div className="h-3.5 w-[1px] bg-white/20 mx-1" />
-
-        {/* User Account / Better Auth Modal Trigger */}
-        <button
-          onClick={() => setIsAuthModalOpen(true)}
-          className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white transition-colors p-1 rounded-xl hover:bg-white/10"
-          title={session?.user ? `Logged in as ${session.user.name}` : 'Sign In / Profile'}
-        >
-          {currentUser ? (
-            <>
-              <span
-                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm shrink-0"
-                style={{ backgroundColor: currentUser.color || '#3B82F6' }}
-              >
-                {currentUser.name.charAt(0)}
-              </span>
-              <span className="font-semibold text-white/90 text-xs">
-                {currentUser.name.split(' ')[0]}
-              </span>
-            </>
+        {/* Right Nav Actions & Profile */}
+        <div className="flex items-center gap-2 shrink-0">
+          {pathname === '/about' ? (
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <LayoutDashboard className="w-3 h-3 text-amber-400" />
+              <span>Board</span>
+            </Link>
           ) : (
-            <>
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In</span>
-            </>
+            <Link
+              href="/about"
+              className="px-2.5 py-1 rounded-full text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              About
+            </Link>
           )}
-        </button>
+
+          <div className="h-3.5 w-[1px] bg-white/20 shrink-0" />
+
+          {/* User Account / Better Auth Modal Trigger */}
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10 shrink-0"
+            title={session?.user ? `Logged in as ${session.user.name}` : 'Sign In / Profile'}
+          >
+            {currentUser ? (
+              <>
+                {currentUser.avatar ? (
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    className="w-5 h-5 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm shrink-0"
+                    style={{ backgroundColor: currentUser.color || '#3B82F6' }}
+                  >
+                    {currentUser.name.charAt(0)}
+                  </span>
+                )}
+                <span className="font-semibold text-white/90 text-xs max-w-[80px] truncate">
+                  {currentUser.name.split(' ')[0]}
+                </span>
+              </>
+            ) : (
+              <>
+                <LogIn className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs font-semibold">Sign In</span>
+              </>
+            )}
+          </button>
+        </div>
       </nav>
     </GlassSurface>
   );

@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import MicroSlats from "@/components/MicroSlats";
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-poppins",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "TaskBasket - Realtime Collaborative Task Board",
@@ -16,12 +24,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full", "dark", "antialiased", "font-sans")}
+      className={cn("h-full", "dark", "antialiased", poppins.variable)}
     >
-      <body className="relative h-screen w-screen overflow-hidden bg-black text-white selection:bg-white/20">
+      <body className={cn(poppins.className, "font-sans relative h-screen w-screen overflow-hidden bg-[#292016] text-white selection:bg-white/20")}>
         {/* Background Aurora Shader */}
         <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden opacity-80">
-          <MicroSlats
+          {/* <MicroSlats
             preset="swell"
             color="#00ffb3"
             glintColor="#000000"
@@ -48,7 +56,7 @@ export default function RootLayout({
             fog={0.55}
             introDuration={1.5}
             paused={true}
-          />
+          /> */}
         </div>
 
         <div className="relative z-10 h-screen w-full flex flex-col p-3 sm:p-4 lg:p-5 max-w-[1700px] mx-auto overflow-hidden">
